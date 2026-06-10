@@ -187,10 +187,24 @@ tr:hover td{background:rgba(200,118,42,.04)}
 
 @media(max-width:700px){
   .sidebar{display:none}
-  .main{margin-left:0}
+  .main{margin-left:0;padding-bottom:75px}
   .kpi-row{grid-template-columns:repeat(2,1fr)}
   .fg-row,.fg-row3{grid-template-columns:1fr}
+  .topbar-kpis{display:none}
+  .content{padding:16px}
 }
+/* BOTTOM NAV MÓVIL */
+.mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;
+  background:var(--dark);border-top:var(--bd);
+  z-index:100;box-shadow:0 -4px 20px rgba(0,0,0,.5)}
+.mob-nav-inner{display:flex;align-items:stretch;height:66px;overflow-x:auto}
+.mni{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;background:transparent;border:none;
+  color:var(--latte);font-family:'Outfit',sans-serif;font-size:9px;font-weight:600;
+  padding:6px 2px;min-width:52px;transition:.2s;white-space:nowrap}
+.mni:hover,.mni.on{color:var(--gold);background:rgba(200,118,42,.1)}
+.mni .mi{font-size:20px;line-height:1}
+@media(max-width:700px){.mob-nav{display:block}}
 </style>
 </head>
 <body>
@@ -380,6 +394,19 @@ tr:hover td{background:rgba(200,118,42,.04)}
     </div>
   </div>
 </div>
+
+<!-- BOTTOM NAV MÓVIL -->
+<nav class="mob-nav" id="mobNav">
+  <div class="mob-nav-inner">
+    <button class="mni on" id="mn-dashboard" onclick="goSection('dashboard')"><span class="mi">📊</span>Dashboard</button>
+    <button class="mni" id="mn-depositos" onclick="goSection('depositos')"><span class="mi">⬆️</span>Depósitos</button>
+    <button class="mni" id="mn-retiros" onclick="goSection('retiros')"><span class="mi">⬇️</span>Retiros</button>
+    <button class="mni" id="mn-usuarios" onclick="goSection('usuarios')"><span class="mi">👥</span>Usuarios</button>
+    <button class="mni" id="mn-productos" onclick="goSection('productos')"><span class="mi">🫘</span>Café</button>
+    <button class="mni" id="mn-banco" onclick="goSection('banco')"><span class="mi">🏦</span>Banco</button>
+    <button class="mni" onclick="adminLogout()"><span class="mi">🚪</span>Salir</button>
+  </div>
+</nav>
 
 <!-- MODAL USUARIO DETALLE -->
 <div class="overlay" id="mUser">
@@ -808,8 +835,12 @@ function statusBadge(s){
 function goSection(name){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('.sbi').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('.mni').forEach(b=>b.classList.remove('on'));
   document.getElementById('sec-'+name).classList.add('on');
-  document.getElementById('nav-'+name).classList.add('on');
+  const sb=document.getElementById('nav-'+name);
+  if(sb)sb.classList.add('on');
+  const mn=document.getElementById('mn-'+name);
+  if(mn)mn.classList.add('on');
   const titles={dashboard:'📊 Dashboard',depositos:'⬆️ Depósitos',retiros:'⬇️ Retiros',
     usuarios:'👥 Usuarios',productos:'🫘 Productos',banco:'🏦 Cuenta Banco'};
   document.getElementById('sectionTitle').textContent=titles[name]||name;
