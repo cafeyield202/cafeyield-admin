@@ -325,7 +325,7 @@ tr:hover td{background:rgba(200,118,42,.04)}
         <div class="card" style="padding:0">
           <div class="tbl-wrap">
             <table>
-              <thead><tr><th>Nombre</th><th>Teléfono</th><th>Código Ref.</th><th>Balance</th><th>Invertido</th><th>Ganado</th><th>Com. Ref.</th><th>Red</th><th>Registro</th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Teléfono</th><th>Código Ref.</th><th>Balance</th><th>Invertido</th><th>Ganado</th><th>Com. Ref.</th><th>Red</th><th>Registro</th><th>Detalle</th></tr></thead>
               <tbody id="userTable"><tr><td colspan="9" class="empty-state">Cargando...</td></tr></tbody>
             </table>
           </div>
@@ -413,7 +413,7 @@ tr:hover td{background:rgba(200,118,42,.04)}
 
 <!-- MODAL USUARIO DETALLE -->
 <div class="overlay" id="mUser">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
     <button class="mx" onclick="closeM('mUser')">✕</button>
     <h3 id="mUserName">👤 Usuario</h3>
     <div id="mUserBody"></div>
@@ -686,7 +686,7 @@ function filterUsers(){
 function renderUsers(){renderUserTable(ALL_USERS);}
 function renderUserTable(list){
   const tb=document.getElementById('userTable');
-  if(!list.length){tb.innerHTML='<tr><td colspan="9" class="empty-state">Sin usuarios</td></tr>';return;}
+  if(!list.length){tb.innerHTML='<tr><td colspan="10" class="empty-state">Sin usuarios</td></tr>';return;}
   tb.innerHTML=list.map(u=>{
     const refCount=ALL_USERS.filter(x=>x.ref_by===u.id).length;
     return`<tr>
@@ -695,12 +695,150 @@ function renderUserTable(list){
       <td><span style="background:rgba(232,169,60,.12);border:1px solid rgba(232,169,60,.25);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--gold);font-family:monospace">${u.ref_code}</span></td>
       <td style="color:var(--gold);font-weight:700">$${fm(u.balance)}</td>
       <td style="color:var(--latte)">$${fm(u.invested)}</td>
-      <td style="color:var(--glow)">$${fm((u.earned||0))}</td>
-      <td style="color:var(--glow)">$${fm((u.ref_earned||0))}</td>
-      <td><span style="font-size:12px;color:var(--latte)">${refCount} N1</span></td>
+      <td style="color:var(--glow)">$${fm(u.earned||0)}</td>
+      <td style="color:var(--glow)">$${fm(u.ref_earned||0)}</td>
+      <td><span style="font-size:12px;color:var(--latte)">${refCount} refs</span></td>
       <td style="color:var(--latte);font-size:11px">${fmtD(u.created_at)}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="openUserModal('${u.id}')">👁 Ver</button></td>
     </tr>`;
   }).join('');
+}
+
+async function openUserModal(uid){
+  const u=ALL_USERS.find(x=>x.id===uid);if(!u)return;
+  document.getElementById('mUserName').textContent='👤 '+u.name;
+  document.getElementById('mUserBody').innerHTML='<div class="empty-state">Cargando...</div>';
+  document.getElementById('mUser').classList.add('on');
+
+  // Load investments, transactions, referrals in parallel
+  const [invRes, txRes] = await Promise.all([
+    sb.from('investments').select('*,products(name,icon,yield_pct)').eq('user_id',uid).order('bought_at',{ascending:false}),
+    sb.from('transactions').select('*').eq('user_id',uid).order('created_at',{ascending:false}).limit(30)
+  ]);
+  const invs = invRes.data||[];
+  const txs  = txRes.data||[];
+
+  // Referrals
+  const l1 = ALL_USERS.filter(x=>x.ref_by===uid);
+  const l1ids = l1.map(x=>x.id);
+  const l2 = ALL_USERS.filter(x=>l1ids.includes(x.ref_by));
+  const l2ids = l2.map(x=>x.id);
+  const l3 = ALL_USERS.filter(x=>l2ids.includes(x.ref_by));
+
+  // Ref commissions earned per person
+  const refTxs = txs.filter(t=>t.type==='ref_commission');
+
+  const html=`
+  <!-- Balance & Ajuste -->
+  <div style="background:linear-gradient(135deg,#3d1800,#1a0800);border:var(--bd);border-radius:12px;padding:16px;text-align:center;margin-bottom:14px">
+    <div style="font-size:11px;color:var(--latte);text-transform:uppercase;letter-spacing:1px">Saldo Actual</div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:900;color:var(--gold);margin:4px 0">$${fm(u.balance)}</div>
+    <div style="font-size:12px;color:var(--latte)">Invertido: <b style="color:var(--cream)">$${fm(u.invested)}</b> · Ganado: <b style="color:var(--glow)">$${fm((u.earned||0)+(u.ref_earned||0))}</b></div>
+  </div>
+
+  <!-- Ajustar saldo -->
+  <div style="background:rgba(200,118,42,.07);border:var(--bd);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--latte);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">⚙️ Ajustar Saldo</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="number" id="adjAmount" placeholder="Monto" style="flex:1;min-width:100px;padding:9px 12px;background:rgba(255,255,255,.06);border:var(--bd);border-radius:9px;color:var(--cream);font-family:'Outfit',sans-serif;font-size:13px;outline:none">
+      <input type="text" id="adjNote" placeholder="Motivo (opcional)" style="flex:2;min-width:140px;padding:9px 12px;background:rgba(255,255,255,.06);border:var(--bd);border-radius:9px;color:var(--cream);font-family:'Outfit',sans-serif;font-size:13px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-green btn-sm" style="flex:1" onclick="adjustBalance('${uid}','add')">➕ Agregar Saldo</button>
+      <button class="btn btn-red btn-sm" style="flex:1" onclick="adjustBalance('${uid}','sub')">➖ Quitar Saldo</button>
+    </div>
+  </div>
+
+  <!-- Productos comprados -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--latte);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">🫘 Productos Comprados (${invs.length})</div>
+    ${invs.length?invs.map(p=>{
+      const prod=p.products||{};
+      const colAt=new Date(p.collectable_at).getTime();
+      const ready=!p.collected&&Date.now()>=colAt;
+      const y=p.amount*(p.yield_pct/100);
+      const status=p.collected?'<span style="color:var(--glow);font-size:11px">✅ Cobrado</span>':ready?'<span style="color:var(--gold);font-size:11px">🟢 Listo</span>':'<span style="color:var(--latte);font-size:11px">⏳ Pendiente</span>';
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,.03);border:var(--bd);border-radius:9px;margin-bottom:6px;font-size:12px">
+        <span>${prod.icon||'☕'} <b style="color:var(--cream)">${prod.name||'Producto'}</b></span>
+        <span style="color:var(--gold)">$${fm(p.amount)}</span>
+        <span style="color:var(--glow)">+$${fm(y)} (${p.yield_pct}%)</span>
+        ${status}
+        <span style="color:var(--latte);font-size:10px">${fmtD(p.bought_at||p.created_at)}</span>
+      </div>`;
+    }).join(''):'<div style="color:var(--latte);font-size:12px;padding:8px">Sin productos aún</div>'}
+  </div>
+
+  <!-- Red de referidos -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--latte);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">🤝 Red de Referidos</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+      <div style="text-align:center;padding:10px;background:rgba(255,255,255,.04);border:var(--bd);border-radius:9px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--gold)">${l1.length}</div>
+        <div style="font-size:10px;color:var(--latte);margin-top:2px">Nivel 1 (25%)</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:rgba(255,255,255,.04);border:var(--bd);border-radius:9px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--gold)">${l2.length}</div>
+        <div style="font-size:10px;color:var(--latte);margin-top:2px">Nivel 2 (5%)</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:rgba(255,255,255,.04);border:var(--bd);border-radius:9px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--gold)">${l3.length}</div>
+        <div style="font-size:10px;color:var(--latte);margin-top:2px">Nivel 3 (1%)</div>
+      </div>
+    </div>
+    ${[...l1.map(r=>({...r,lvl:1,pct:25})),...l2.map(r=>({...r,lvl:2,pct:5})),...l3.map(r=>({...r,lvl:3,pct:1}))].map(r=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(255,255,255,.03);border:var(--bd);border-radius:8px;margin-bottom:5px;font-size:12px">
+        <span><b style="color:var(--cream)">${r.name}</b> <span style="font-size:10px;color:var(--latte)">${r.phone}</span></span>
+        <span class="tag tag-${r.lvl}">N${r.lvl}·${r.pct}%</span>
+        <span style="color:var(--glow);font-weight:600">+$${fm((r.invested||0)*r.pct/100)}</span>
+        <span style="color:var(--latte);font-size:10px">${r.invested>0?'🟢 Activo':'⚪ Inactivo'}</span>
+      </div>`).join('')||'<div style="color:var(--latte);font-size:12px;padding:8px">Sin referidos aún</div>'}
+  </div>
+
+  <!-- Historial de transacciones -->
+  <div>
+    <div style="font-size:12px;font-weight:700;color:var(--latte);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">📋 Historial de Movimientos</div>
+    ${txs.length?txs.map(t=>{
+      const pos=t.amount>0;
+      const icons={invest:'📦',yield:'💰',ref_commission:'🤝',deposit:'⬆️',withdraw:'⬇️'};
+      return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(200,118,42,.08);font-size:12px">
+        <span style="font-size:14px">${icons[t.type]||'💱'}</span>
+        <span style="flex:1;color:var(--cream)">${t.label}</span>
+        <span style="font-weight:700;${pos?'color:var(--glow)':'color:#e07060'}">${pos?'+':'-'}$${fm(Math.abs(t.amount))}</span>
+        <span style="color:var(--latte);font-size:10px;white-space:nowrap">${fmtD(t.created_at)}</span>
+      </div>`;
+    }).join(''):'<div style="color:var(--latte);font-size:12px;padding:8px">Sin movimientos</div>'}
+  </div>`;
+
+  document.getElementById('mUserBody').innerHTML=html;
+}
+
+async function adjustBalance(uid, action){
+  const amt=parseFloat(document.getElementById('adjAmount').value);
+  const note=document.getElementById('adjNote').value.trim()||'Ajuste manual por admin';
+  if(!amt||amt<=0){toast('⚠️ Ingresa un monto válido');return;}
+  const u=ALL_USERS.find(x=>x.id===uid);if(!u)return;
+  const finalAmt=action==='add'?amt:-amt;
+  const newBal=(u.balance||0)+finalAmt;
+  if(newBal<0){toast('⚠️ El saldo no puede quedar negativo');return;}
+  load(true);
+  const {error}=await sb.from('users').update({balance:newBal}).eq('id',uid);
+  if(error){load(false);toast('❌ Error al ajustar');return;}
+  // Log transaction
+  await sb.from('transactions').insert({
+    user_id:uid,
+    type: action==='add'?'deposit':'withdraw',
+    amount:finalAmt,
+    label:note
+  });
+  // Update local state
+  u.balance=newBal;
+  await loadUsers();
+  load(false);
+  document.getElementById('adjAmount').value='';
+  document.getElementById('adjNote').value='';
+  // Refresh modal
+  openUserModal(uid);
+  toast(`✅ Saldo ${action==='add'?'agregado':'quitado'}: $${fm(amt)}`);
 }
 
 /* ═══ PRODUCTOS ═══ */
